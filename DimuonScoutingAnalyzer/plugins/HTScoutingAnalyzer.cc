@@ -32,13 +32,24 @@
 #include "DataFormats/Scouting/interface/ScoutingMuon.h"
 #include "DataFormats/Scouting/interface/ScoutingPFJet.h"
 #include "DataFormats/Scouting/interface/ScoutingCaloJet.h"
+#include "DataFormats/Scouting/interface/ScoutingParticle.h"
 #include "DataFormats/PatCandidates/interface/Jet.h"
 #include "DataFormats/PatCandidates/interface/MET.h"
 #include "DataFormats/PatCandidates/interface/Muon.h"
 #include "DataFormats/PatCandidates/interface/TriggerObjectStandAlone.h"
 #include "DataFormats/PatCandidates/interface/PackedTriggerPrescales.h"
+#include "DarkPhotonSearch/DimuonScoutingAnalyzer/interface/EnergyCorrelations.h"
+#include "fastjet/contrib/SoftDrop.hh"
+#include "fastjet/contrib/EnergyCorrelator.hh"
+#include <fastjet/JetDefinition.hh>
 #include <TLorentzVector.h>
 #include "TH1.h"
+
+#include "fastjet/PseudoJet.hh"
+#include <vector>
+#include <map>
+#include "TMath.h"
+#include "TString.h"
 
 class HTScoutingAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
    public:
@@ -46,9 +57,11 @@ class HTScoutingAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources
       ~HTScoutingAnalyzer();
 
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
-
+      static bool orderPseudoJet(fastjet::PseudoJet j1, fastjet::PseudoJet j2); 
+      static std::vector<math::XYZTLorentzVector> makeP4s(const std::vector<fastjet::PseudoJet> &jets);
 
    private:
+  
       virtual void beginJob() override;
       virtual void analyze(const edm::Event&, const edm::EventSetup&) override;
       virtual void endJob() override;
@@ -57,6 +70,7 @@ class HTScoutingAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources
   edm::EDGetTokenT<edm::TriggerResults>            trgResultsLabel_;
   edm::EDGetTokenT<ScoutingCaloJetCollection>      caloJetLabel_;
   edm::EDGetTokenT<ScoutingPFJetCollection>        pfJetLabel_;
+  edm::EDGetTokenT<ScoutingParticleCollection>     particleLabel_;
   edm::EDGetTokenT<pat::JetCollection>             recoJetLabel_;
   edm::EDGetTokenT<ScoutingMuonCollection>         muonLabel_;
   edm::Service<TFileService> fs;
@@ -64,6 +78,13 @@ class HTScoutingAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources
   int passNominalHT250Trig;
   int passNominalHT410Trig;
   int passMonitoringTrig;
+
+  double pfCA8HT;
+  double pfCA8M;
+  double pfCA8Msd;
+  double pfCA8N2sdb1;
+  double pfCA8Pt;
+
   double caloHT;
   double caloMjj;
   double caloDeltaEtajj;
@@ -73,9 +94,12 @@ class HTScoutingAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources
   double pfHT;
   double pfMjj;
   double pfDeltaEtajj;
+  double pfMsdWide;
   double pfMjjWide; 
   double pfDeltaEtajjWide;
   double pfDeltaPhijjWide;
+  double pfN2sdb1;
+
   double recoHT;
   double recoMjj;
   double recoDeltaEtajj;
@@ -83,6 +107,33 @@ class HTScoutingAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources
   double recoDeltaEtajjWide;
   double recoDeltaPhijjWide;
 
+
+
+  TH1F *h1_pfCA8HT_nominalHT250_monitoring;
+  TH1F *h1_pfCA8HT_nominalHT250;
+  TH1F *h1_pfCA8HT_nominalHT410_monitoring;
+  TH1F *h1_pfCA8HT_nominalHT410;
+  TH1F *h1_pfCA8HT_monitoring;
+  TH1F *h1_pfCA8M_nominalHT250_monitoring;
+  TH1F *h1_pfCA8M_nominalHT250;
+  TH1F *h1_pfCA8M_nominalHT410_monitoring;
+  TH1F *h1_pfCA8M_nominalHT410;
+  TH1F *h1_pfCA8M_monitoring;
+  TH1F *h1_pfCA8Msd_nominalHT250_monitoring;
+  TH1F *h1_pfCA8Msd_nominalHT250;
+  TH1F *h1_pfCA8Msd_nominalHT410_monitoring;
+  TH1F *h1_pfCA8Msd_nominalHT410;
+  TH1F *h1_pfCA8Msd_monitoring;
+  TH1F *h1_pfCA8N2sdb1_nominalHT250_monitoring;
+  TH1F *h1_pfCA8N2sdb1_nominalHT250;
+  TH1F *h1_pfCA8N2sdb1_nominalHT410_monitoring;
+  TH1F *h1_pfCA8N2sdb1_nominalHT410;
+  TH1F *h1_pfCA8N2sdb1_monitoring;
+  TH1F *h1_pfCA8Pt_nominalHT250_monitoring;
+  TH1F *h1_pfCA8Pt_nominalHT250;
+  TH1F *h1_pfCA8Pt_nominalHT410_monitoring;
+  TH1F *h1_pfCA8Pt_nominalHT410;
+  TH1F *h1_pfCA8Pt_monitoring;
   TH1F *h1_caloHT_nominalHT250_monitoring;
   TH1F *h1_caloHT_nominalHT410_monitoring;
   TH1F *h1_caloHT_monitoring;
@@ -163,6 +214,11 @@ class HTScoutingAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources
 
 };
 
+bool HTScoutingAnalyzer::orderPseudoJet(fastjet::PseudoJet j1, fastjet::PseudoJet j2) {
+  // to be used to order pseudojets in decreasing pT order                                                                                                   
+  return j1.perp2() > j2.perp2();
+}
+
 
 HTScoutingAnalyzer::HTScoutingAnalyzer(const edm::ParameterSet& iConfig)
 
@@ -170,11 +226,42 @@ HTScoutingAnalyzer::HTScoutingAnalyzer(const edm::ParameterSet& iConfig)
   trgResultsLabel_         = consumes<edm::TriggerResults>(iConfig.getParameter<edm::InputTag>("triggerResults"));
   caloJetLabel_            = consumes<ScoutingCaloJetCollection>(iConfig.getParameter<edm::InputTag>("caloJets"));
   pfJetLabel_              = consumes<ScoutingPFJetCollection>(iConfig.getParameter<edm::InputTag>("pfJets"));
+  particleLabel_           = consumes<ScoutingParticleCollection>(iConfig.getParameter<edm::InputTag>("candidates"));
   recoJetLabel_            = consumes<pat::JetCollection>(iConfig.getParameter<edm::InputTag>("recoJets"));
   muonLabel_               = consumes<ScoutingMuonCollection>(iConfig.getParameter<edm::InputTag>("muons"));
   usesResource("TFileService");
 
   TFileDirectory histoDir = fs->mkdir("histoDir");
+
+  h1_pfCA8HT_nominalHT250_monitoring = histoDir.make<TH1F>("pfCA8HT_nominalHT250_monitoring", "pfCA8HT_nominalHT250_monitoring", 14000, 0, 14000);
+  h1_pfCA8HT_nominalHT250            = histoDir.make<TH1F>("pfCA8HT_nominalHT250", "pfCA8HT_nominalHT250", 14000, 0, 14000);
+  h1_pfCA8HT_nominalHT410_monitoring = histoDir.make<TH1F>("pfCA8HT_nominalHT410_monitoring", "pfCA8HT_nominalHT410_monitoring", 14000, 0, 14000);
+  h1_pfCA8HT_nominalHT410            = histoDir.make<TH1F>("pfCA8HT_nominalHT410", "pfCA8HT_nominalHT410", 14000, 0, 14000);
+  h1_pfCA8HT_monitoring         = histoDir.make<TH1F>("pfCA8HT_monitoring", "pfCA8HT_monitoring", 14000, 0, 14000);
+
+  h1_pfCA8M_nominalHT250_monitoring = histoDir.make<TH1F>("pfCA8M_nominalHT250_monitoring", "pfCA8M_nominalHT250_monitoring", 40, 0, 250);
+  h1_pfCA8M_nominalHT250            = histoDir.make<TH1F>("pfCA8M_nominalHT250", "pfCA8M_nominalHT250", 40, 0, 250);
+  h1_pfCA8M_nominalHT410_monitoring = histoDir.make<TH1F>("pfCA8M_nominalHT410_monitoring", "pfCA8M_nominalHT410_monitoring", 40, 0, 250);
+  h1_pfCA8M_nominalHT410            = histoDir.make<TH1F>("pfCA8M_nominalHT410", "pfCA8M_nominalHT410", 40, 0, 250);
+  h1_pfCA8M_monitoring         = histoDir.make<TH1F>("pfCA8M_monitoring", "pfCA8M_monitoring", 40, 0, 250);
+
+  h1_pfCA8Msd_nominalHT250_monitoring = histoDir.make<TH1F>("pfCA8Msd_nominalHT250_monitoring", "pfCA8Msd_nominalHT250_monitoring", 40, 0, 250);
+  h1_pfCA8Msd_nominalHT250            = histoDir.make<TH1F>("pfCA8Msd_nominalHT250", "pfCA8Msd_nominalHT250", 40, 0, 250);
+  h1_pfCA8Msd_nominalHT410_monitoring = histoDir.make<TH1F>("pfCA8Msd_nominalHT410_monitoring", "pfCA8Msd_nominalHT410_monitoring", 40, 0, 250);
+  h1_pfCA8Msd_nominalHT410            = histoDir.make<TH1F>("pfCA8Msd_nominalHT410", "pfCA8Msd_nominalHT410", 40, 0, 250);
+  h1_pfCA8Msd_monitoring         = histoDir.make<TH1F>("pfCA8Msd_monitoring", "pfCA8Msd_monitoring", 40, 0, 250);
+
+  h1_pfCA8N2sdb1_nominalHT250_monitoring = histoDir.make<TH1F>("pfCA8N2sdb1_nominalHT250_monitoring", "pfCA8N2sdb1_nominalHT250_monitoring", 25,0,0.5);
+  h1_pfCA8N2sdb1_nominalHT250            = histoDir.make<TH1F>("pfCA8N2sdb1_nominalHT250", "pfCA8N2sdb1_nominalHT250", 25,0,0.5);
+  h1_pfCA8N2sdb1_nominalHT410_monitoring = histoDir.make<TH1F>("pfCA8N2sdb1_nominalHT410_monitoring", "pfCA8N2sdb1_nominalHT410_monitoring", 25,0,0.5);
+  h1_pfCA8N2sdb1_nominalHT410            = histoDir.make<TH1F>("pfCA8N2sdb1_nominalHT410", "pfCA8N2sdb1_nominalHT410", 25,0,0.5);
+  h1_pfCA8N2sdb1_monitoring         = histoDir.make<TH1F>("pfCA8N2sdb1_monitoring", "pfCA8N2sdb1_monitoring", 25,0,0.5);
+
+  h1_pfCA8Pt_nominalHT250_monitoring = histoDir.make<TH1F>("pfCA8Pt_nominalHT250_monitoring", "pfCA8Pt_nominalHT250_monitoring", 20, 200, 700);
+  h1_pfCA8Pt_nominalHT250            = histoDir.make<TH1F>("pfCA8Pt_nominalHT250", "pfCA8Pt_nominalHT250", 20, 200, 700);
+  h1_pfCA8Pt_nominalHT410_monitoring = histoDir.make<TH1F>("pfCA8Pt_nominalHT410_monitoring", "pfCA8Pt_nominalHT410_monitoring", 20, 200, 700);
+  h1_pfCA8Pt_nominalHT410            = histoDir.make<TH1F>("pfCA8Pt_nominalHT410", "pfCA8Pt_nominalHT410", 20, 200, 700);
+  h1_pfCA8Pt_monitoring         = histoDir.make<TH1F>("pfCA8Pt_monitoring", "pfCA8Pt_monitoring", 20, 200, 700);
 
   h1_caloHT_nominalHT250_monitoring = histoDir.make<TH1F>("caloHT_nominalHT250_monitoring", "caloHT_nominalHT250_monitoring", 14000, 0, 14000);
   h1_caloHT_nominalHT250            = histoDir.make<TH1F>("caloHT_nominalHT250", "caloHT_nominalHT250", 14000, 0, 14000);
@@ -273,13 +360,20 @@ HTScoutingAnalyzer::~HTScoutingAnalyzer()
 {
 }
 
+std::vector<math::XYZTLorentzVector> HTScoutingAnalyzer::makeP4s(const std::vector<fastjet::PseudoJet> &jets) {
+  std::vector<math::XYZTLorentzVector> JetObjectsAll;
+  for (const fastjet::PseudoJet & pj : jets) {
+    JetObjectsAll.push_back( math::XYZTLorentzVector( pj.px(), pj.py(), pj.pz(), pj.e() ) );
+  }
+  return JetObjectsAll;
+}
 
 // ------------ method called for each event  ------------
 void
 HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
 
-  //std::cout << "\nEVT" << std::endl;
+   std::cout << "\nEVT" << std::endl;
    using namespace edm;
    passNominalHT250Trig=99;
    passNominalHT410Trig=99;
@@ -295,6 +389,7 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
    pfMjj=-1;
    pfDeltaEtajj = -1;
    pfMjjWide = -1; 
+   pfMsdWide = -1;
    pfDeltaEtajjWide = -1;
    pfDeltaPhijjWide = -1;
    
@@ -304,6 +399,13 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
    recoMjjWide = -1; 
    recoDeltaEtajjWide = -1;
    recoDeltaPhijjWide = -1;
+
+   pfCA8HT=0.0;
+   pfCA8M=-1;
+   pfCA8Msd=-1;
+   pfCA8N2sdb1=-1;
+   pfCA8Pt=0;
+
    edm::Handle<edm::TriggerResults> trgResultsHandle;
    iEvent.getByToken(trgResultsLabel_, trgResultsHandle);
    
@@ -326,7 +428,9 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
    
    //std::cout << "HT250:" << passNominalHT250Trig << " Mu50:" << passMonitoringTrig << std::endl;
    //std::cout << "HT410:" << passNominalHT410Trig << " Mu50:" << passMonitoringTrig << std::endl;
-   
+
+   EnergyCorrelations* fECF;
+   fECF = new EnergyCorrelations();
    
    edm::Handle<ScoutingMuonCollection> muonHandle;
    iEvent.getByToken(muonLabel_, muonHandle);
@@ -340,6 +444,8 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
    edm::Handle<pat::JetCollection> recoJetHandle;
    iEvent.getByToken(recoJetLabel_, recoJetHandle);
    
+   edm::Handle<ScoutingParticleCollection> particleHandle;
+   iEvent.getByToken(particleLabel_, particleHandle);
    
    for (ScoutingCaloJetCollection::const_iterator iCj = caloJetHandle->begin(); iCj != caloJetHandle->end(); ++iCj) {	   
      TLorentzVector cj1;
@@ -360,6 +466,40 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
    }
       
    double wideJetDeltaR_ = 1.1;
+
+   // Get PF particles and clusterize in CA8 jets
+   std::vector<fastjet::PseudoJet>  lClusterParticles;
+   if(particleHandle->size() > 1){
+     for (ScoutingParticleCollection::const_iterator kPj = particleHandle->begin(); kPj != particleHandle->end(); ++kPj) {
+       TLorentzVector vC0; vC0.SetPtEtaPhiM(kPj->pt(),kPj->eta(),kPj->phi(),kPj->m());
+       fastjet::PseudoJet pPart(vC0.Px(),vC0.Py(),vC0.Pz(),vC0.E());
+       lClusterParticles.emplace_back(pPart);
+     }
+   }
+
+   // Choose a Jet Definition and Sequence, 0 is ptMin
+   fastjet::JetDefinition lCJet_def8(fastjet::cambridge_algorithm, 0.8);
+   fastjet::ClusterSequence lCClust_seq8(lClusterParticles, lCJet_def8);
+   std::vector<fastjet::PseudoJet> ca8inclusive_jets = fastjet::sorted_by_pt(lCClust_seq8.inclusive_jets(0));
+   std::vector<math::XYZTLorentzVector> ca8jets = makeP4s(ca8inclusive_jets);
+   for(unsigned int i0 = 0; i0 < ca8inclusive_jets.size(); i0++) {
+     fastjet::contrib::SoftDrop SD(0.,0.1,0.8);
+     fastjet::PseudoJet SD_jet = SD(ca8inclusive_jets[i0]);
+     if (ca8jets[i0].Pt() > 100. && fabs(ca8jets[i0].Eta()) < 3.0) pfCA8HT += ca8jets[i0].Pt();
+     pfCA8M = ca8jets[i0].M();
+     pfCA8Msd = SD_jet.m();
+     pfCA8Pt = ca8jets[i0].Pt();
+
+     double beta=1;
+     std::vector<fastjet::PseudoJet> lSDClusterParticles = SD_jet.constituents();
+     std::sort(lSDClusterParticles.begin(),lSDClusterParticles.end(),orderPseudoJet);
+     int nFilter = TMath::Min(100,(int)lSDClusterParticles.size());
+     std::vector<fastjet::PseudoJet> lSDFilter(lSDClusterParticles.begin(),lSDClusterParticles.begin()+nFilter);
+     fECF->calcECFN(beta,lSDFilter,true);
+     float ca8pfe2_sdb1      = float(fECF->manager->ecfns["2_2"]);
+     float ca8pfe3_v2_sdb1   = float(fECF->manager->ecfns["3_2"]);
+     pfCA8N2sdb1 = ca8pfe3_v2_sdb1/(ca8pfe2_sdb1*ca8pfe2_sdb1);
+   }
 
    if (caloJetHandle->size() > 2){     
      TLorentzVector wj1, wj2, wdijet;
@@ -393,6 +533,7 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
      } //fid, jet id, pt cut
      
      // Re-order the wide jets in pt
+     std::cout << "wide " << wj1_tmp.Pt() << wj2_tmp.Pt() <<std::endl;
      if( wj1_tmp.Pt() > wj2_tmp.Pt())
        {
 	 wj1 = wj1_tmp;
@@ -420,6 +561,14 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
      TLorentzVector wj1_tmp, wj2_tmp;
      const ScoutingPFJet & iCj = (*pfJetHandle)[ 0 ];
      const ScoutingPFJet & jCj = (*pfJetHandle)[ 1 ];
+     std::vector<fastjet::PseudoJet>  lClusterParticlesW;                                                                                                 
+     for(unsigned int i0 = 0; i0 < iCj.constituents().size(); i0++) {
+       const ScoutingParticle &iC0 = (*particleHandle)[i0];
+       TLorentzVector vC0; vC0.SetPtEtaPhiM(iC0.pt(),iC0.eta(),iC0.phi(),iC0.m());
+       fastjet::PseudoJet pPart(vC0.Px(),vC0.Py(),vC0.Pz(),vC0.E());
+       lClusterParticlesW.emplace_back(pPart);  
+     }
+
      if (iCj.pt() > 60. && fabs(iCj.eta()) < 2.5) {	 
        if (jCj.pt() > 30. && fabs(jCj.eta()) < 2.5) {
 	 TLorentzVector jet1, jet2;
@@ -429,6 +578,7 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
 	 pfDeltaEtajj = fabs(jet1.Eta()-jet2.Eta());
 	 for (ScoutingPFJetCollection::const_iterator kCj = pfJetHandle->begin(); kCj != pfJetHandle->end(); ++kCj) {
 	   TLorentzVector currentJet;
+	   std::vector<int> pfConstituents = kCj->constituents();
 	   if (kCj->pt() > 30. && fabs(kCj->eta()) < 2.5) {
 	     currentJet.SetPtEtaPhiM(kCj->pt(), kCj->eta(), kCj->phi(), kCj->m());			   
 	     double DeltaR1 = currentJet.DeltaR(jet1);
@@ -436,6 +586,12 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
 	     if(DeltaR1 < DeltaR2 && DeltaR1 < wideJetDeltaR_)
 	       {
 		 wj1_tmp += currentJet;
+		 for(unsigned int i0 = 0; i0 < pfConstituents.size(); i0++) {
+		   const ScoutingParticle &kC0 = (*particleHandle)[i0];
+		   TLorentzVector vC0; vC0.SetPtEtaPhiM(kC0.pt(),kC0.eta(),kC0.phi(),kC0.m());
+		   fastjet::PseudoJet pPart(vC0.Px(),vC0.Py(),vC0.Pz(),vC0.E());
+		   lClusterParticlesW.emplace_back(pPart);
+		 }
 	       }
 	     else if(DeltaR2 < wideJetDeltaR_)
 	       {
@@ -443,8 +599,28 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
 	       }			 
 	   } // if AK4 jet passes fid and jetid.
 	 } //end of ak4 jet loop		     
+	
        } //fid, jet id, pt cut
      } //fid, jet id, pt cut
+
+     // Recluster constituents of wide jet
+     fastjet::JetDefinition lCJet_def(fastjet::cambridge_algorithm, 2.0);
+     fastjet::ClusterSequence lCClust_seq(lClusterParticlesW, lCJet_def);
+     std::vector<fastjet::PseudoJet> inclusive_jets = lCClust_seq.inclusive_jets(0);
+     fastjet::contrib::SoftDrop sd(0.,0.1,2.0);
+     fastjet::PseudoJet sd_jet = sd(inclusive_jets[0]);
+     pfMsdWide = sd_jet.m();
+     double beta=1;
+     std::vector<fastjet::PseudoJet> lSDClusterParticlesW = sd_jet.constituents();
+     std::sort(lSDClusterParticlesW.begin(),lSDClusterParticlesW.end(),orderPseudoJet);
+     int nFilter = TMath::Min(100,(int)lSDClusterParticlesW.size());
+     std::vector<fastjet::PseudoJet> lSDFiltered(lSDClusterParticlesW.begin(),lSDClusterParticlesW.begin()+nFilter);
+     fECF->calcECFN(beta,lSDFiltered,true);
+     float pfe2_sdb1      = float(fECF->manager->ecfns["2_2"]);
+     //float pfe3_sdb1      = float(fECF->manager->ecfns["3_3"]);
+     //float pfe3_v1_sdb1   = float(fECF->manager->ecfns["3_1"]);
+     float pfe3_v2_sdb1   = float(fECF->manager->ecfns["3_2"]);
+     pfN2sdb1 = pfe3_v2_sdb1/(pfe2_sdb1*pfe2_sdb1);
      
      // Re-order the wide jets in pt
      if( wj1_tmp.Pt() > wj2_tmp.Pt())
@@ -463,9 +639,11 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
 	 // Create dijet system
 	 wdijet = wj1 + wj2;
 	 pfMjjWide = wdijet.M();
+	 std::cout << "mass " << wj1.M() << " inclusivejets reclustered " << inclusive_jets[0].m() << " size " << inclusive_jets.size() << " sd " << pfMsdWide << std::endl;
 	 pfDeltaEtajjWide = fabs(wj1.Eta()-wj2.Eta());
 	 pfDeltaPhijjWide = fabs(wj1.DeltaPhi(wj2));
        }
+
 
    } // end of two PF jets.
 
@@ -525,6 +703,12 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
    } // end of two RECO jets.
    
    if (passNominalHT250Trig && passMonitoringTrig) {
+     h1_pfCA8HT_nominalHT250_monitoring->Fill(pfCA8HT) ;
+     if(pfCA8M > 0) h1_pfCA8M_nominalHT250_monitoring->Fill(pfCA8M) ;
+     if(pfCA8Msd > 0) h1_pfCA8Msd_nominalHT250_monitoring->Fill(pfCA8Msd) ;
+     if(pfCA8Pt > 0) h1_pfCA8Pt_nominalHT250_monitoring->Fill(pfCA8Pt) ;
+     if(pfCA8N2sdb1 > 0) h1_pfCA8N2sdb1_nominalHT250_monitoring->Fill(pfCA8N2sdb1) ;
+
      h1_caloHT_nominalHT250_monitoring->Fill(caloHT) ;
      if (caloDeltaEtajj > -1 && caloDeltaEtajj < 1.3) h1_caloMjj_nominalHT250_monitoring->Fill(caloMjj) ;
      h1_caloDeltaEtajj_nominalHT250_monitoring->Fill(caloDeltaEtajj) ;
@@ -544,6 +728,12 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
      h1_recoDeltaEtajjWide_nominalHT250_monitoring->Fill(recoDeltaEtajjWide) ;
    }
    if (passNominalHT410Trig && passMonitoringTrig) {
+     h1_pfCA8HT_nominalHT410_monitoring->Fill(pfCA8HT) ;
+     if(pfCA8M > 0) h1_pfCA8M_nominalHT410_monitoring->Fill(pfCA8M) ;
+     if(pfCA8Msd > 0) h1_pfCA8Msd_nominalHT410_monitoring->Fill(pfCA8Msd) ;
+     if(pfCA8Pt > 0) h1_pfCA8Pt_nominalHT410_monitoring->Fill(pfCA8Pt) ;
+     if(pfCA8N2sdb1 > 0) h1_pfCA8N2sdb1_nominalHT410_monitoring->Fill(pfCA8N2sdb1) ;
+
      h1_caloHT_nominalHT410_monitoring->Fill(caloHT) ;
      if (caloDeltaEtajj > -1 && caloDeltaEtajj < 1.3) h1_caloMjj_nominalHT410_monitoring->Fill(caloMjj) ;
      h1_caloDeltaEtajj_nominalHT410_monitoring->Fill(caloDeltaEtajj) ;
@@ -563,6 +753,12 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
      h1_recoDeltaEtajjWide_nominalHT410_monitoring->Fill(recoDeltaEtajjWide) ;
    }
    if (passNominalHT250Trig) {
+     h1_pfCA8HT_nominalHT250->Fill(pfCA8HT) ;
+     if(pfCA8M > 0) h1_pfCA8M_nominalHT250->Fill(pfCA8M) ;
+     if(pfCA8Msd > 0) h1_pfCA8Msd_nominalHT250->Fill(pfCA8Msd) ;
+     if(pfCA8Pt > 0) h1_pfCA8Pt_nominalHT250->Fill(pfCA8Pt) ;
+     if(pfCA8N2sdb1 > 0) h1_pfCA8N2sdb1_nominalHT250->Fill(pfCA8N2sdb1) ;
+
      h1_caloHT_nominalHT250->Fill(caloHT) ;
      if (caloDeltaEtajj > -1 && caloDeltaEtajj < 1.3) h1_caloMjj_nominalHT250->Fill(caloMjj) ;
      h1_caloDeltaEtajj_nominalHT250->Fill(caloDeltaEtajj) ;
@@ -582,6 +778,12 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
      h1_recoDeltaEtajjWide_nominalHT250->Fill(recoDeltaEtajjWide) ;
    }
    if (passNominalHT410Trig) {
+     h1_pfCA8HT_nominalHT410->Fill(pfCA8HT) ;
+     if(pfCA8M > 0) h1_pfCA8M_nominalHT410->Fill(pfCA8M) ;
+     if(pfCA8Msd > 0) h1_pfCA8Msd_nominalHT410->Fill(pfCA8Msd) ;
+     if(pfCA8Pt > 0) h1_pfCA8Pt_nominalHT410->Fill(pfCA8Pt) ;
+     if(pfCA8N2sdb1 > 0) h1_pfCA8N2sdb1_nominalHT410->Fill(pfCA8N2sdb1) ;
+
      h1_caloHT_nominalHT410->Fill(caloHT) ;
      if (caloDeltaEtajj > -1 && caloDeltaEtajj < 1.3) h1_caloMjj_nominalHT410->Fill(caloMjj) ;
      h1_caloDeltaEtajj_nominalHT410->Fill(caloDeltaEtajj) ;
@@ -601,6 +803,12 @@ HTScoutingAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
      h1_recoDeltaEtajjWide_nominalHT410->Fill(recoDeltaEtajjWide) ;
    }
    if (passMonitoringTrig) {
+     h1_pfCA8HT_monitoring->Fill(pfCA8HT) ;
+     if(pfCA8M > 0) h1_pfCA8M_monitoring->Fill(pfCA8M) ;
+     if(pfCA8Msd > 0) h1_pfCA8Msd_monitoring->Fill(pfCA8Msd) ;
+     if(pfCA8Pt > 0) h1_pfCA8Pt_monitoring->Fill(pfCA8Pt) ;
+     if(pfCA8N2sdb1 > 0) h1_pfCA8N2sdb1_monitoring->Fill(pfCA8N2sdb1) ;
+
      h1_caloHT_monitoring->Fill(caloHT) ;
      if (caloDeltaEtajj > -1 && caloDeltaEtajj < 1.3) h1_caloMjj_monitoring->Fill(caloMjj) ;
      h1_caloDeltaEtajj_monitoring->Fill(caloDeltaEtajj) ;

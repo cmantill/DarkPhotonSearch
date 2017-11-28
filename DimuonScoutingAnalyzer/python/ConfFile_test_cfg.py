@@ -27,7 +27,7 @@ process.source = cms.Source('PoolSource',
                             secondaryFileNames = readParentFiles)
 
 import FWCore.PythonUtilities.LumiList as LumiList
-process.source.lumisToProcess = LumiList.LumiList(filename = 'json_DCSONLY.txt').getVLuminosityBlockRange()
+process.source.lumisToProcess = LumiList.LumiList(filename = '/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions17/13TeV/DCSOnly/json_DCSONLY.txt').getVLuminosityBlockRange()
 
 process.TFileService = cms.Service("TFileService",
                                    fileName = cms.string('AnalysisOutput.root'),

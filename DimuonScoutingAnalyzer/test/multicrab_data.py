@@ -66,7 +66,7 @@ if __name__ == '__main__':
             config.Data.totalUnits = nfiles
             config.Data.outputDatasetTag = sample
             config.Data.lumiMask = mask
-            config.Data.outLFNDirBase = '/store/user/woodson/' + name + '_' + key # change this depending on where you want to store things (your username)
+            config.Data.outLFNDirBase = '/store/user/cmantill/' + name + '_' + key # change this depending on where you want to store things (your username)
             submit(config)
             
             

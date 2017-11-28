@@ -14,4 +14,9 @@
 <use name="CondFormats/DataRecord"/>
 <use name="CommonTools/Utils"/>
 <use name="CommonTools/UtilAlgos"/>
+
+<use name="DarkPhotonSearch/DimuonScoutingAnalyzer"/>
+<use name="fastjet"/>
+<use name="fastjet-contrib"/>
+
 <flags EDM_PLUGIN="1"/>
